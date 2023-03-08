@@ -25,3 +25,5 @@ wandb/*
 
 # cache
 cache/*
+/py310.sh
+/.vscode/settings.json
