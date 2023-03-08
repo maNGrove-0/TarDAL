@@ -72,10 +72,13 @@ class InferFD:
             # recolor
             if self.data_t.color and self.config.inference.grayscale is False:
                 fus = torch.cat([fus, sample['cbcr']], dim=1)
+                # 检测网络都是在rgb上操作的？
                 fus = ycbcr_to_rgb(fus)
+            # 在fuse并recolor后在进行检测
             # d_net forward
             pred = self.detect.inference(fus)
             # save images
+            # 输入了pred，因此会输出含bounding box的结果
             self.data_t.pred_save(
                 fus, [self.save_dir / name for name in sample['name']],
                 shape=sample['shape'], pred=pred,

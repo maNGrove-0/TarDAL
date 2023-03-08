@@ -49,6 +49,19 @@ class TrainF:
         self.save_dir = save_dir
         logging.info(f'model weights will be saved to {str(save_dir)}')
 
+        # init dataset & dataloader
+        data_t = getattr(loader, config.dataset.name)  # dataset type
+        t_dataset = data_t(root=config.dataset.root, mode='train', config=config)
+        v_dataset = data_t(root=config.dataset.root, mode='val', config=config)
+        self.t_loader = DataLoader(
+            t_dataset, batch_size=config.train.batch_size, shuffle=True,
+            collate_fn=data_t.collate_fn, pin_memory=True, num_workers=config.train.num_workers,
+        )
+        self.v_loader = DataLoader(
+            v_dataset, batch_size=config.train.batch_size,
+            collate_fn=data_t.collate_fn, pin_memory=True, num_workers=config.train.num_workers,
+        )
+
         # init pipeline
         fuse = Fuse(config, mode='train')
         self.fuse = fuse
@@ -85,18 +98,6 @@ class TrainF:
         lr_fn = lambda x: (1 - x / config.train.epochs) * (1 - o_cfg.lr_f) + o_cfg.lr_f
         self.scheduler = LambdaLR(self.optimizer, lr_lambda=lr_fn)
 
-        # init dataset & dataloader
-        data_t = getattr(loader, config.dataset.name)  # dataset type
-        t_dataset = data_t(root=config.dataset.root, mode='train', config=config)
-        v_dataset = data_t(root=config.dataset.root, mode='val', config=config)
-        self.t_loader = DataLoader(
-            t_dataset, batch_size=config.train.batch_size, shuffle=True,
-            collate_fn=data_t.collate_fn, pin_memory=True, num_workers=config.train.num_workers,
-        )
-        self.v_loader = DataLoader(
-            v_dataset, batch_size=config.train.batch_size,
-            collate_fn=data_t.collate_fn, pin_memory=True, num_workers=config.train.num_workers,
-        )
 
     def run(self):
         # epochs & eval interval & save interval
@@ -106,13 +107,17 @@ class TrainF:
         # start training process
         for epoch in range(1, epochs + 1):
             # train
+            # 应该跟之前那个是一样的
             t_l = tqdm(self.t_loader, disable=False, total=len(self.t_loader) if not self.config.debug.fast_run else 3, ncols=120)
             g_history = [AverageMeter() for _ in range(5)]  # tot, src, adv, tar, det
             disc_history = AverageMeter(), AverageMeter()  # target, detail
             log_dict = {}
             for sample in t_l:
+                # 这就是顺序执行好像也没啥warmup呀
                 sample = dict_to_device(sample, self.fuse.device)
+                # 先训练生成器
                 # train generator
+                # 这个训练阶段分warming阶段和正常阶段
                 g_loss, [src_l, adv_l, tar_l, det_l] = self.fuse.criterion_generator(
                     ir=sample['ir'], vi=sample['vi'],
                     mk=sample['mask'],
@@ -122,6 +127,7 @@ class TrainF:
                 g_history[0].update(g_loss.item())
                 _ = [g_history[idx + 1].update(v) for idx, v in enumerate([src_l, adv_l, tar_l, det_l])]
                 self.optim(g_loss)
+                # 训练DT
                 # train target discriminator
                 d_t_loss = self.fuse.criterion_dis_t(
                     ir=sample['ir'], vi=sample['vi'],
@@ -129,6 +135,7 @@ class TrainF:
                 )
                 disc_history[0].update(d_t_loss.item())
                 self.optim(d_t_loss)
+                # 训练DD
                 # train detail discriminator
                 d_d_loss = self.fuse.criterion_dis_d(
                     ir=sample['ir'], vi=sample['vi'],
@@ -151,6 +158,7 @@ class TrainF:
                 e_l = tqdm(self.v_loader, disable=True)
                 for sample in e_l:
                     sample = dict_to_device(sample, self.fuse.device)
+                    # 直接生成fuse图像进行eval
                     fus = self.fuse.eval(ir=sample['ir'], vi=sample['vi'])
                     log_dict |= {'fuse': wandb.Image(fus), 'mask': wandb.Image(sample['mask'])}
                     break

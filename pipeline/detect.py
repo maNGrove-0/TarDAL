@@ -165,8 +165,10 @@ class Detect:
     def inference(self, imgs: Tensor) -> Tensor:
         self.net.eval()
         # forward
+        # 得到网络输出结果
         preds, _ = self.net(imgs)
         # convert pred format
+        # 进行NMS后处理，得到最后的结果
         batch_size, _, height, width = imgs.shape
         preds = non_max_suppression(preds, conf_thres=0.001, iou_thres=0.6, multi_label=True)  # [xyxy, conf, cls]
         # return as expected

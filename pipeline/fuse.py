@@ -40,7 +40,7 @@ class Fuse:
         logging.info(f'init generator with (dim: {f_dim} depth: {f_depth})')
         self.generator = generator
 
-        # init tardel discriminator during train mode
+        # init tardal discriminator during train mode
         if mode == 'train':
             f_size = config.train.image_size
             dis_t = Discriminator(dim=f_dim, size=f_size)
@@ -77,7 +77,7 @@ class Fuse:
         # more parameters
         # WGAN div hyper parameters
         self.wk, self.wp = 2, 6
-
+    # 加载权重
     def load_ckpt(self, ckpt: dict):
         ckpt = ckpt if 'fuse' not in ckpt else ckpt['fuse']
 
@@ -97,34 +97,35 @@ class Fuse:
         if self.mode == 'train' and 'disc' in ckpt:
             self.dis_t.load_state_dict(ckpt['disc']['t'])
             self.dis_d.load_state_dict(ckpt['disc']['d'])
-
+    # 记录权重
     def save_ckpt(self) -> dict:
         ckpt = {'fuse': self.generator.state_dict()}
         if self.mode == 'train':
             ckpt |= {'disc': {'t': self.dis_t.state_dict(), 'd': self.dis_t.state_dict()}}
         return ckpt
-
+    # 生成融合图
     def forward(self, ir: Tensor, vi: Tensor) -> Tensor:
         self.generator.train()
         fus = self.generator(ir, vi)
         return fus
-
+    # 生成融合图(不计算梯度版本)
     @torch.no_grad()
     def eval(self, ir: Tensor, vi: Tensor) -> Tensor:
         self.generator.eval()
         fus = self.generator(ir, vi)
         return fus
 
+    # 也是生成融合图？？(这又是什么版本啊)(inference mode：比不计算梯度进行了更多的优化)
     @torch.inference_mode()
     def inference(self, ir: Tensor, vi: Tensor) -> Tensor:
         if self.config.inference.use_eval:
             self.generator.eval()
         fus = self.generator(ir, vi)
         return fus
-
+    # 计算DT的loss
     def criterion_dis_t(self, ir: Tensor, vi: Tensor, mk: Tensor) -> Tensor:
         """
-        criterion on target discriminator 'ir * m <- pixel distribution -> fus * m'
+        criterion on target discriminator 'ir * m <- pixel distribution -> fus * m(这个标识又是什么意思呢)'
         """
 
         logging.debug('criterion on target discriminator')
@@ -133,11 +134,14 @@ class Fuse:
         self.dis_t.train()
 
         # sample real & fake
+        # 红外的前景
         real_s = ir * mk
+        # fuse的前景
         fake_s = self.eval(ir, vi) * mk
         fake_s.detach_()
 
         # judge value towards real & fake
+        # dis_t得到的是分数
         real_v = torch.squeeze(self.dis_t(real_s))
         fake_v = torch.squeeze(self.dis_t(fake_s))
 
@@ -147,7 +151,7 @@ class Fuse:
         loss = real_l + fake_l + self.wk * div
 
         return loss
-
+    # 计算DD的loss
     def criterion_dis_d(self, ir: Tensor, vi: Tensor, mk: Tensor) -> Tensor:
         """
         criterion on detail discriminator 'vi * m <- grad distribution -> fus * (1-m)'
@@ -175,7 +179,7 @@ class Fuse:
         loss = real_l + fake_l + self.wk * div
 
         return loss
-
+    # 计算生成器的loss
     def criterion_generator(self, ir: Tensor, vi: Tensor, mk: Tensor, w1: Tensor, w2: Tensor, d_warming: bool = True):
         """
         criterion on generator 'ir, vi <- loss -> fus'
@@ -190,6 +194,7 @@ class Fuse:
         # calculate src and adv loss
         f_loss = self.config.loss.fuse
         src_w, adv_w = f_loss.src, f_loss.adv
+        # 如果在warming阶段这个是0, 那么就是只按照自己的content loss进行训练
         adv_w = 0 if d_warming else adv_w
         src_l = w1 * self.src_loss(fus, ir) + w2 * self.src_loss(fus, vi)
         adv_l, tar_l, det_l = self.adv_loss(fus, mk)

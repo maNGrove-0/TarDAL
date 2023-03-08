@@ -128,6 +128,7 @@ class TrainFD:
             disc_history = AverageMeter(), AverageMeter()  # discriminator loss: target, detail
             log_dict = {}
             # warm up shots, max(warmup_epochs, 100 shots)
+            # 最多 warm 100次, 应该是warm太多了辨别器太强也不平衡？
             w_config = self.config.scheduler
             w_shots_0 = max(round(w_config.warmup_epochs[0] * len(self.t_loader)), 100)  # bridge warm
             w_shots_1 = max(round(w_config.warmup_epochs[1] * len(self.t_loader)), 100)  # normal warm
@@ -135,7 +136,7 @@ class TrainFD:
             # process
             self.fd_opt.zero_grad()
             for idx, sample in enumerate(t_l):
-                # warm up
+                ################################################# warm up ###################################################
                 c_shots = idx + len(self.t_loader) * (epoch - 1)
                 if c_shots < w_shots[0]:
                     for jdx, x in enumerate(self.fd_opt.param_groups):
@@ -157,11 +158,13 @@ class TrainFD:
 
                 # forward
                 sample = dict_to_device(sample, self.fuse.device)
+                # warm up完了之后开始训练生成器
 
-                # train generator
+                ########################################## train generator ####################################################
                 # ir & vi -> f_net -> fus -> d_net -> obj
                 # loss: fus -> src + adv, obj -> ground truth
                 # f_net forward and cal loss
+                # 计算生成器的损失
                 f_loss, [src_l, adv_l, tar_l, det_l] = self.fuse.criterion_generator(
                     ir=sample['ir'], vi=sample['vi'],
                     mk=sample['mask'],
@@ -176,6 +179,7 @@ class TrainFD:
                     fus = torch.cat([fus, sample['cbcr']], dim=1)
                     fus = ycbcr_to_rgb(fus)
                 # d_net forward and cal loss
+                # 鉴别器的损失
                 d_loss, [box_l, obj_l, cls_l] = self.detect.criterion(
                     imgs=fus,
                     targets=sample['labels'],
@@ -195,7 +199,7 @@ class TrainFD:
                     l_opt_shot = c_shots
                     logging.debug(f'optimize f+d | shots: {c_shots} | accumulate: {accumulate} | last: {l_opt_shot}')
 
-                # train target discriminator
+                ############################################### train target discriminator ########################################################
                 d_t_loss = self.fuse.criterion_dis_t(
                     ir=sample['ir'], vi=sample['vi'],
                     mk=sample['mask'],
@@ -205,7 +209,7 @@ class TrainFD:
                 d_t_loss.backward()
                 self.disc_opt.step()
 
-                # train detail discriminator
+                ############################################## train detail discriminator #########################################################
                 d_d_loss = self.fuse.criterion_dis_d(
                     ir=sample['ir'], vi=sample['vi'],
                     mk=sample['mask'],

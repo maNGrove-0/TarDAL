@@ -14,99 +14,58 @@ from torchvision.utils import draw_bounding_boxes
 from config import ConfigDict
 from loader.utils.checker import check_mask, check_image, check_labels, check_iqa, get_max_size
 from loader.utils.reader import gray_read, ycbcr_read, label_read, img_write, label_write
-from tools.scenario_reader import scenario_counter, generate_meta
 
-
-class M3FD(Dataset):
-    # 数据集的基础信息
+class DroneVehicle(Dataset):
     type = 'fuse & detect'  # dataset type: 'fuse' or 'fuse & detect'
     color = True  # dataset visible format: false -> 'gray' or true -> 'color'
-    # classes = ['People', 'Car', 'Bus', 'Lamp', 'Motorcycle', 'Truck']
-    classes = ['People', 'Car', 'Bus', 'Motorcycle', 'Lamp', 'Truck']
-    palette = ['#FF0000', '#C1C337', '#2FA7B4', '#F84F2C', '#F541C4', '#7D2CC8']
+    classes = ['Car', 'Truck', 'Freight Car', 'Buse', 'Van']
+    palette = ['#FF0000', '#C1C337', '#2FA7B4', '#F541C4', '#7D2CC8']
 
-    # 这里有生成meta的tools呢
-    generate_meta_lock = False  # generate meta once
-
-    # 初始化, root是dataset路径，mode是三种模式之一， config是参数
     def __init__(self, root: str | Path, mode: Literal['train', 'val', 'pred'], config: ConfigDict):
         super().__init__()
         root = Path(root)
-        self.root = root
         self.mode = mode
         self.config = config
 
-        # check json meta config
-        # lock是false的时候进行meta生成
-        if M3FD.generate_meta_lock is False:
-            # 这个json文件是啥，没有哇
-            if Path(root / 'meta' / 'scenario.json').exists():
-                logging.info('found scenario.json, generating train & val list.')
-                scenario_counter(root / 'meta' / 'scenario.json')
-                generate_meta(root)
-                M3FD.generate_meta_lock = True
-            else:
-                logging.warning('not found scenario.json, using current train & val list.')
-
-        # 从mode.txt文件中读出文件名并凑出路径
-        # read corresponding list
-        img_list = Path(root / 'meta' / f'{mode}.txt').read_text().splitlines()
-        logging.info(f'load {len(img_list)} images from {root.name}')
+        img_list = Path(root/ 'meta' / f'{mode}.txt').read_text().splitlines()
+        logging.info(f'load {len(img_list)} from {root.name}')
         self.img_list = img_list
 
-        # 确定txt文件中的文件都在
-        # check images
         check_image(root, img_list)
 
-        # 确定label都在
-        # check labels
-        self.labels = check_labels(root, img_list)
+        self.label = check_labels(root, img_list)
 
-        # more check
         match mode:
-            # train和val模式下，还要确定mask和iqa
             case 'train' | 'val':
-                # check mask cache
                 check_mask(root, img_list, config)
-                # check iqa cache
                 check_iqa(root, img_list, config)
-            # test模式下，要crop？
+
             case _:
-                # get max shape
-                self.max_size = get_max_size(root, img_list)
+                self.max_size = get_max_size(root,img_list)
                 self.transform_fn = Resize(size=self.max_size)
 
-    # 定义数量计算方法
     def __len__(self) -> int:
         return len(self.img_list)
 
-    # 训练模式和测试模式也不同
     def __getitem__(self, index: int) -> dict:
-        # choose get item method
         match self.mode:
             case 'train' | 'val':
                 return self.train_val_item(index)
             case _:
                 return self.pred_item(index)
 
-    # 根据index取数据的具体方法
     def train_val_item(self, index: int) -> dict:
-        # image name, like '028.png'
         name = self.img_list[index]
         logging.debug(f'train-val mode: loading item {name}')
 
-        # load infrared and visible
         ir = gray_read(self.root / 'ir' / name)
-        vi, cbcr = ycbcr_read(self.root / 'vi' / name)
+        vi, cbcr = ycbcr_read(self.root / 'ir' / name)
 
-        # load mask
         mask = gray_read(self.root / 'mask' / name)
 
-        # load information measurement
         ir_w = gray_read(self.root / 'iqa' / 'ir' / name)
         vi_w = gray_read(self.root / 'iqa' / 'vi' / name)
 
-        # load label
         label_p = Path(name).stem + '.txt'
         labels = label_read(self.root / 'labels' / label_p)
 
@@ -147,7 +106,7 @@ class M3FD(Dataset):
 
         # return as expected
         return sample
-    # 测试时的取数据方法
+
     def pred_item(self, index: int) -> dict:
         # image name, like '028.png'
         name = self.img_list[index]
@@ -172,8 +131,8 @@ class M3FD(Dataset):
     @staticmethod
     def pred_save(fus: Tensor, names: List[str | Path], shape: List[Size], pred: Optional[Tensor] = None, save_txt: bool = False):
         if pred is None:
-            return M3FD.pred_save_no_boxes(fus, names, shape)
-        return M3FD.pred_save_with_boxes(fus, names, shape, pred, save_txt)
+            return DroneVehicle.pred_save_no_boxes(fus, names, shape)
+        return DroneVehicle.pred_save_with_boxes(fus, names, shape, pred, save_txt)
 
     @staticmethod
     def pred_save_no_boxes(fus: Tensor, names: List[str | Path], shape: List[Size]):
@@ -195,8 +154,8 @@ class M3FD(Dataset):
             pred_x = list(filter(lambda x: x[4] > 0.6, pred_i))
             boxes = [x[:4] for x in pred_x]
             cls_idx = [int(x[5].cpu().numpy()) for x in pred_x]
-            labels = [f'{M3FD.classes[cls]}: {x[4].cpu().numpy():.2f}' for cls, x in zip(cls_idx, pred_x)]
-            colors = [M3FD.palette[cls] for cls, x in zip(cls_idx, pred_x)]
+            labels = [f'{DroneVehicle.classes[cls]}: {x[4].cpu().numpy():.2f}' for cls, x in zip(cls_idx, pred_x)]
+            colors = [DroneVehicle.palette[cls] for cls, x in zip(cls_idx, pred_x)]
             if len(boxes):
                 img = draw_bounding_boxes(img, torch.stack(boxes, dim=0), labels, colors, width=2)
             img = img.float() / 255
@@ -236,3 +195,5 @@ class M3FD(Dataset):
                     new_data[key] = torch.stack(k_data, dim=0)
         # return as expected
         return new_data
+
+

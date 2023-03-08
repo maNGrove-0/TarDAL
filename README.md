@@ -196,13 +196,13 @@ Under normal circumstances, you don't need to manually download the model parame
 ```shell
 # TarDAL-DT
 # use official tardal-dt infer config and save images to runs/tardal-dt
-python infer.py --cfg configs/official/tardal-dt.yaml --save_dir runs/tardal-dt
+python infer.py --cfg config/official/infer/tardal-dt.yaml --save_dir runs/tardal-dt
 # TarDAL-TT
 # use official tardal-tt infer config and save images to runs/tardal-tt
-python infer.py --cfg configs/official/tardal-tt.yaml --save_dir runs/tardal-tt
+python infer.py --cfg config/official/infer/tardal-tt.yaml --save_dir runs/tardal-tt
 # TarDAL-CT
 # use official tardal-ct infer config and save images to runs/tardal-ct
-python infer.py --cfg configs/official/tardal-ct.yaml --save_dir runs/tardal-ct
+python infer.py --cfg config/official/infer/tardal-ct.yaml --save_dir runs/tardal-ct
 ```
 
 #### Train
@@ -216,11 +216,11 @@ Unlike previous code versions, you don't need to preprocess the data, we will au
 
 ```shell
 # TarDAL-DT
-python train.py --cfg configs/official/tardal-dt.yaml --auth $YOUR_WANDB_KEY
+python train.py --cfg config/official/train/tardal-dt.yaml --auth 4c44864a2831e0a056db8bab95ab9968926d5b31
 # TarDAL-TT
-python train.py --cfg configs/official/tardal-tt.yaml --auth $YOUR_WANDB_KEY
+python train.py --cfg config/official/train/tardal-tt.yaml --auth $YOUR_WANDB_KEY
 # TarDAL-CT
-python train.py --cfg configs/official/tardal-ct.yaml --auth $YOUR_WANDB_KEY
+python train.py --cfg config/official/train/tardal-ct.yaml --auth $YOUR_WANDB_KEY
 ```
 
 If you want to base your approach on ours and extend it to a production environment, here are some additional suggestions for you.
