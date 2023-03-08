@@ -5,7 +5,7 @@ save_dir : 'cache' # folder used for saving the model, logs results
 # debug mode settings
 debug    :
   log       : INFO # log level
-  wandb_mode: 'online' # wandb connection mode
+  wandb_mode: 'offline' # wandb connection mode
   fast_run  : false # use a small subset of the dataset for debugging code
 
 # framework training strategy:

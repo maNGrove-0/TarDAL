@@ -41,7 +41,9 @@ class InferF:
         # init dataset & dataloader
         data_t = getattr(loader, config.dataset.name)  # dataset type
         self.data_t = data_t
+        # 初始化数据集
         p_dataset = data_t(root=config.dataset.root, mode='pred', config=config)
+        # 使用pytorch的dataloader对数据集进行操作（分batch，shuffle）
         self.p_loader = DataLoader(
             p_dataset, batch_size=config.inference.batch_size, shuffle=False,
             collate_fn=data_t.collate_fn, pin_memory=True, num_workers=config.inference.num_workers,
@@ -53,12 +55,16 @@ class InferF:
 
     @torch.inference_mode()
     def run(self):
+        # 从dataloader中读取数据
         p_l = tqdm(self.p_loader, total=len(self.p_loader), ncols=120)
         for sample in p_l:
+            # 加载数据
             sample = dict_to_device(sample, self.fuse.device)
             # f_net forward
+            # 调用fuse进行融合推断
             fus = self.fuse.inference(ir=sample['ir'], vi=sample['vi'])
             # recolor
+            # 如果data_t无颜色并且不要求推断灰度图
             if self.data_t.color and self.config.inference.grayscale is False:
                 fus = torch.cat([fus, sample['cbcr']], dim=1)
                 fus = ycbcr_to_rgb(fus)

@@ -30,10 +30,14 @@ if __name__ == '__main__':
 
     # choose inference script
     logging.info(f'enter {config.strategy} inference mode')
+    # 只融合或者加上检测
     match config.strategy:
         case 'fuse':
+            # 为啥要用getattr选择呢
+            # scripts.InferF应该是等价的
             infer_p = getattr(scripts, 'InferF')
             # check pretrained weights
+            # 如果没有预训练模型，会链接到github上的预训练模型
             if config.fuse.pretrained is None:
                 logging.warning('no pretrained weights specified, use official pretrained weights')
                 config.fuse.pretrained = 'https://github.com/JinyuanLiu-CV/TarDAL/releases/download/v1.0.0/tardal-dt.pth'
@@ -43,6 +47,7 @@ if __name__ == '__main__':
             if config.fuse.pretrained is None:
                 logging.warning('no pretrained weights specified, use official pretrained weights')
                 config.fuse.pretrained = 'https://github.com/JinyuanLiu-CV/TarDAL/releases/download/v1.0.0/tardal-ct.pth'
+        # 推断阶段需要融合和检测同时进行
         case 'detect':
             raise NotImplementedError('detect mode is useless during inference period, please use fuse & detect mode')
         case _:

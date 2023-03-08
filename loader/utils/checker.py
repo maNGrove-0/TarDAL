@@ -11,7 +11,7 @@ from loader.utils.reader import label_read, gray_read
 from pipeline.iqa import IQA
 from pipeline.saliency import Saliency
 
-
+# 检查图像存在
 def check_image(root: Path, img_list: List[str]):
     assert (root / 'ir').exists() and (root / 'vi').exists(), f'ir and vi folders are required'
     for img_name in img_list:
@@ -20,7 +20,7 @@ def check_image(root: Path, img_list: List[str]):
             sys.exit(1)
     logging.info('find all images on list')
 
-
+# 检查iqa存在，不存在的话生成
 def check_iqa(root: Path, img_list: List[str], config: ConfigDict):
     iqa_cache = True
     if (root / 'iqa').exists():
@@ -37,7 +37,7 @@ def check_iqa(root: Path, img_list: List[str], config: ConfigDict):
         iqa = IQA(url=config.iqa.url)
         iqa.inference(src=root, dst=root / 'iqa')
 
-
+# 检查标签
 def check_labels(root: Path, img_list: List[str]) -> List[Tensor]:
     assert (root / 'labels').exists(), f'labels folder is required'
     labels = []
@@ -50,7 +50,7 @@ def check_labels(root: Path, img_list: List[str]) -> List[Tensor]:
     logging.info('find all labels on list')
     return labels
 
-
+# 检查mask，不存在的话生成
 def check_mask(root: Path, img_list: List[str], config: ConfigDict):
     mask_cache = True
     if (root / 'mask').exists():
@@ -67,7 +67,7 @@ def check_mask(root: Path, img_list: List[str], config: ConfigDict):
         saliency = Saliency(url=config.saliency.url)
         saliency.inference(src=root / 'ir', dst=root / 'mask')
 
-
+# 寻找能够包含所有图像的最小尺寸
 def get_max_size(root: Path, img_list: List[str]):
     max_h, max_w = -1, -1
     logging.info('find suitable size for prediction')
